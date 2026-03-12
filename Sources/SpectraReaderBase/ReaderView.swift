@@ -3,91 +3,56 @@ import SwiftUI
 struct ReaderView: View {
   @ObservedObject var viewModel: ReaderViewModel
   @ObservedObject var settings: SettingsStore
-  let onOpenSettings: () -> Void
 
   var body: some View {
-    let blocks = settings.readerEnabled ? viewModel.recognizedBlocks : []
+    ZStack {
+      RoundedRectangle(cornerRadius: 16)
+        .fill(Color.black.opacity(settings.overlayOpacity))
 
-    ZStack(alignment: .topLeading) {
-      RoundedRectangle(cornerRadius: 12)
-        .fill(Color.black.opacity(settings.lensOpacity))
+      readingSurface
+        .padding(8)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: 16))
+    .overlay(
+      RoundedRectangle(cornerRadius: 16)
+        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+    )
+    .ignoresSafeArea()
+  }
 
-      GeometryReader { proxy in
-        let size = proxy.size
-        let dominantSize = Self.calculateDominantSize(from: blocks, in: size)
+  private var readingSurface: some View {
+    GeometryReader { proxy in
+      let size = proxy.size
+      let blocks = viewModel.recognizedBlocks
+      let dominantSize = Self.calculateDominantSize(from: blocks, in: size)
 
-        ZStack(alignment: .topLeading) {
+      ZStack(alignment: .topLeading) {
+        if settings.hidesOverlayText {
+          EmptyView()
+        } else if blocks.isEmpty {
+          Text("이 영역을 읽으려면 '읽기'를 누르세요.")
+            .font(.system(size: 15, weight: .medium))
+            .foregroundColor(.white.opacity(0.48))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
           ForEach(blocks) { block in
             let rect = Self.rect(for: block.boundingBox, in: size)
-            let fontSize = Self.smartFontSize(for: rect, dominant: dominantSize, offset: settings.fontSizeOffset)
+            let fontSize = Self.smartFontSize(for: rect, dominant: dominantSize)
 
             Text(block.text)
               .font(.system(size: fontSize, weight: .medium))
-              .foregroundColor(Color(hex: settings.textColorHex))
-              .kerning(settings.letterSpacing)
+              .foregroundColor(.white.opacity(0.96))
               .lineLimit(1)
-              .minimumScaleFactor(0.4)
-              .shadow(color: .black.opacity(0.75), radius: 2, x: 0, y: 0)
-              .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 0)
+              .minimumScaleFactor(0.45)
+              .shadow(color: .black.opacity(0.72), radius: 2, x: 0, y: 0)
               .frame(maxWidth: max(0, size.width - rect.minX), alignment: .topLeading)
               .offset(x: rect.minX, y: rect.minY)
           }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       }
-      .allowsHitTesting(false)
-      .id(settings.fontSizeOffset)
-      .id(settings.letterSpacing)
-
-      VStack(alignment: .leading, spacing: 8) {
-        HStack(spacing: 8) {
-          StatusPill(text: viewModel.statusText, isBusy: viewModel.isBusy)
-
-          Spacer()
-
-          Button("Settings", action: onOpenSettings)
-            .buttonStyle(.borderless)
-            .foregroundColor(.white.opacity(0.7))
-        }
-
-        if !viewModel.recognizedText.isEmpty {
-          Text(viewModel.recognizedText)
-            .font(.system(size: 11, weight: .regular, design: .monospaced))
-            .foregroundColor(.white.opacity(0.6))
-            .lineLimit(3)
-        }
-      }
-      .padding(14)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-    .clipShape(RoundedRectangle(cornerRadius: 12))
-    .padding(8)
-    .overlay(
-      RoundedRectangle(cornerRadius: 12)
-        .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-        .padding(8)
-    )
-    .ignoresSafeArea()
-  }
-}
-
-private struct StatusPill: View {
-  let text: String
-  let isBusy: Bool
-
-  var body: some View {
-    HStack(spacing: 6) {
-      Circle()
-        .fill(isBusy ? Color.orange : Color.green.opacity(0.85))
-        .frame(width: 7, height: 7)
-
-      Text(text)
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundColor(.white.opacity(0.92))
-    }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
-    .background(Color.black.opacity(0.32))
-    .clipShape(Capsule())
+    .allowsHitTesting(false)
   }
 }
 
@@ -106,8 +71,7 @@ private extension ReaderView {
     var counts: [Int: Int] = [:]
 
     for block in blocks {
-      let h = block.boundingBox.height * viewSize.height
-      let rawSize = h * 0.75
+      let rawSize = block.boundingBox.height * viewSize.height * 0.75
       let key = Int(round(rawSize))
       counts[key, default: 0] += 1
     }
@@ -119,16 +83,16 @@ private extension ReaderView {
     return nil
   }
 
-  static func smartFontSize(for rect: CGRect, dominant: CGFloat?, offset: Double) -> CGFloat {
+  static func smartFontSize(for rect: CGRect, dominant: CGFloat?) -> CGFloat {
     let rawSize = rect.height * 0.75
-    var finalSize = rawSize
+    let finalSize: CGFloat
 
     if let dominant, abs(rawSize - dominant) <= 3.0 {
       finalSize = dominant
-    } else if dominant == nil {
+    } else {
       finalSize = round(rawSize)
     }
 
-    return max(10, finalSize + offset)
+    return max(11, finalSize)
   }
 }

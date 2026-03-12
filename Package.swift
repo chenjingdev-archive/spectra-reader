@@ -8,6 +8,9 @@ let package = Package(
   products: [
     .executable(name: "spectra-reader-base", targets: ["SpectraReaderBase"])
   ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-testing.git", exact: "6.2.4")
+  ],
   targets: [
     .executableTarget(
       name: "SpectraReaderBase",
@@ -18,6 +21,14 @@ let package = Package(
         .linkedFramework("CoreGraphics"),
         .linkedFramework("ApplicationServices")
       ]
+    ),
+    .testTarget(
+      name: "SpectraReaderBaseTests",
+      dependencies: [
+        "SpectraReaderBase",
+        .product(name: "Testing", package: "swift-testing")
+      ],
+      path: "Tests/SpectraReaderBaseTests"
     )
   ]
 )

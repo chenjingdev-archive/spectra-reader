@@ -1,134 +1,160 @@
 import Foundation
 import CoreGraphics
 import Combine
-import AppKit
-import SwiftUI
 
 @MainActor
 final class SettingsStore: ObservableObject {
-  @Published var intervalSeconds: Double {
-    didSet { saveInterval() }
-  }
-
-  @Published var intervalEnabled: Bool {
-    didSet { saveIntervalEnabled() }
-  }
-
-  @Published var readerEnabled: Bool {
-    didSet { saveReaderEnabled() }
-  }
-
-  @Published var lensOpacity: Double {
-    didSet { saveLensOpacity() }
-  }
-
   @Published var lensFrame: CGRect? {
     didSet { saveLensFrame() }
   }
 
-  @Published var fontSizeOffset: Double {
-    didSet { saveFontSizeOffset() }
+  @Published var assistantFrame: CGRect? {
+    didSet { saveAssistantFrame() }
   }
 
-  @Published var letterSpacing: Double {
-    didSet { saveLetterSpacing() }
+  @Published var overlayOpacity: Double {
+    didSet { defaults.set(overlayOpacity, forKey: Keys.overlayOpacity) }
   }
 
-  @Published var hotkeyModifiers: UInt {
-    didSet { saveHotkey() }
+  @Published var allowsClickThrough: Bool {
+    didSet { defaults.set(allowsClickThrough, forKey: Keys.allowsClickThrough) }
   }
 
-  @Published var hotkeyKeyCode: Int {
-    didSet { saveHotkey() }
+  @Published var hidesOverlayText: Bool {
+    didSet { defaults.set(hidesOverlayText, forKey: Keys.hidesOverlayText) }
   }
 
-  @Published var textColorHex: String {
-    didSet { saveTextColor() }
+  @Published var toggleHotkey: HotkeyBinding {
+    didSet { saveHotkey(toggleHotkey, prefix: Keys.toggleHotkey) }
+  }
+
+  @Published var assistHotkey: HotkeyBinding {
+    didSet { saveHotkey(assistHotkey, prefix: Keys.assistHotkey) }
+  }
+
+  @Published var helperCommandPath: String {
+    didSet { defaults.set(helperCommandPath, forKey: Keys.helperCommandPath) }
+  }
+
+  @Published var selectedPresetID: String {
+    didSet {
+      defaults.set(selectedPresetID, forKey: Keys.selectedPresetID)
+      reconcileSelectedPreset()
+    }
+  }
+
+  @Published var presets: [AssistPreset] {
+    didSet {
+      savePresets()
+      reconcileSelectedPreset()
+    }
   }
 
   private let defaults: UserDefaults
+  private var isReconcilingPresetSelection = false
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
-
-    let storedInterval = defaults.object(forKey: Keys.intervalSeconds) as? Double
-    intervalSeconds = max(1.0, storedInterval ?? 2.0)
-    intervalEnabled = defaults.bool(forKey: Keys.intervalEnabled)
-
-    if defaults.object(forKey: Keys.readerEnabled) == nil {
-      readerEnabled = true
-    } else {
-      readerEnabled = defaults.bool(forKey: Keys.readerEnabled)
-    }
-
-    let storedOpacity = defaults.object(forKey: Keys.lensOpacity) as? Double
-    lensOpacity = min(0.9, max(0.05, storedOpacity ?? 0.55))
+    let storedPresets = Self.loadPresets(from: defaults)
+    let initialPresets = storedPresets.isEmpty ? AssistPreset.defaultPresets() : storedPresets
 
     lensFrame = Self.loadLensFrame(from: defaults)
+    assistantFrame = Self.loadFrame(forKey: Keys.assistantFrame, from: defaults)
+    overlayOpacity = Self.loadOverlayOpacity(from: defaults)
+    allowsClickThrough = defaults.bool(forKey: Keys.allowsClickThrough)
+    hidesOverlayText = defaults.bool(forKey: Keys.hidesOverlayText)
+    toggleHotkey = Self.loadHotkey(from: defaults, prefix: Keys.toggleHotkey) ?? Self.loadLegacyToggleHotkey(from: defaults)
+    assistHotkey = Self.loadHotkey(from: defaults, prefix: Keys.assistHotkey) ?? .none
+    helperCommandPath = defaults.string(forKey: Keys.helperCommandPath) ?? ""
+    presets = initialPresets
+    selectedPresetID = defaults.string(forKey: Keys.selectedPresetID) ?? initialPresets.first?.id ?? ""
+    reconcileSelectedPreset()
+  }
 
-    let storedOffset = defaults.object(forKey: Keys.fontSizeOffset) as? Double
-    fontSizeOffset = storedOffset ?? 2.0
+  var selectedPreset: AssistPreset? {
+    presets.first { $0.id == selectedPresetID }
+  }
 
-    let storedTracking = defaults.object(forKey: Keys.letterSpacing) as? Double
-    letterSpacing = storedTracking ?? 1.2
+  func addPreset() {
+    let preset = AssistPreset(
+      name: "새 프리셋",
+      promptTemplate: "다음 화면 내용을 읽기 쉽게 설명해줘.",
+      isBuiltIn: false
+    )
+    presets.append(preset)
+    selectedPresetID = preset.id
+  }
 
-    let storedHotkeyModifiers = defaults.object(forKey: Keys.hotkeyModifiers) as? UInt
-    let storedHotkeyKeyCode = defaults.object(forKey: Keys.hotkeyKeyCode) as? Int
-    hotkeyModifiers = storedHotkeyModifiers ?? 0
-    hotkeyKeyCode = storedHotkeyKeyCode ?? -1
+  func removeSelectedPreset() {
+    guard let preset = selectedPreset, !preset.isBuiltIn else { return }
+    presets.removeAll { $0.id == preset.id }
+  }
 
-    textColorHex = defaults.string(forKey: Keys.textColorHex) ?? "#FFFFFF"
+  func updateSelectedPresetName(_ name: String) {
+    updateSelectedPreset { $0.name = name }
+  }
+
+  func updateSelectedPresetPrompt(_ prompt: String) {
+    updateSelectedPreset { $0.promptTemplate = prompt }
   }
 
   private enum Keys {
-    static let intervalSeconds = "intervalSeconds"
-    static let intervalEnabled = "intervalEnabled"
-    static let readerEnabled = "readerEnabled"
-    static let lensOpacity = "lensOpacity"
     static let lensFrame = "lensFrame"
-    static let fontSizeOffset = "fontSizeOffset"
-    static let letterSpacing = "letterSpacing"
-    static let hotkeyModifiers = "hotkeyModifiers"
-    static let hotkeyKeyCode = "hotkeyKeyCode"
-    static let textColorHex = "textColorHex"
+    static let assistantFrame = "assistantFrame"
+    static let overlayOpacity = "overlayOpacity"
+    static let allowsClickThrough = "allowsClickThrough"
+    static let hidesOverlayText = "hidesOverlayText"
+    static let toggleHotkey = "toggleHotkey"
+    static let assistHotkey = "assistHotkey"
+    static let helperCommandPath = "helperCommandPath"
+    static let selectedPresetID = "selectedPresetID"
+    static let presets = "presets"
+    static let legacyHotkeyModifiers = "hotkeyModifiers"
+    static let legacyHotkeyKeyCode = "hotkeyKeyCode"
   }
 
-  private func saveTextColor() {
-    defaults.set(textColorHex, forKey: Keys.textColorHex)
+  private func updateSelectedPreset(_ update: (inout AssistPreset) -> Void) {
+    guard let index = presets.firstIndex(where: { $0.id == selectedPresetID }) else { return }
+    var preset = presets[index]
+    update(&preset)
+    presets[index] = preset
   }
 
-  private func saveHotkey() {
-    defaults.set(hotkeyModifiers, forKey: Keys.hotkeyModifiers)
-    defaults.set(hotkeyKeyCode, forKey: Keys.hotkeyKeyCode)
+  private func reconcileSelectedPreset() {
+    guard !isReconcilingPresetSelection else { return }
+    isReconcilingPresetSelection = true
+    defer { isReconcilingPresetSelection = false }
+
+    if presets.isEmpty {
+      presets = AssistPreset.defaultPresets()
+    }
+
+    if !presets.contains(where: { $0.id == selectedPresetID }), let firstPreset = presets.first {
+      selectedPresetID = firstPreset.id
+    }
   }
 
-  private func saveInterval() {
-    defaults.set(intervalSeconds, forKey: Keys.intervalSeconds)
+  private func saveHotkey(_ hotkey: HotkeyBinding, prefix: String) {
+    defaults.set(hotkey.modifiers, forKey: "\(prefix).modifiers")
+    defaults.set(hotkey.keyCode, forKey: "\(prefix).keyCode")
   }
 
-  private func saveFontSizeOffset() {
-    defaults.set(fontSizeOffset, forKey: Keys.fontSizeOffset)
-  }
-
-  private func saveLetterSpacing() {
-    defaults.set(letterSpacing, forKey: Keys.letterSpacing)
-  }
-
-  private func saveIntervalEnabled() {
-    defaults.set(intervalEnabled, forKey: Keys.intervalEnabled)
-  }
-
-  private func saveReaderEnabled() {
-    defaults.set(readerEnabled, forKey: Keys.readerEnabled)
-  }
-
-  private func saveLensOpacity() {
-    defaults.set(lensOpacity, forKey: Keys.lensOpacity)
+  private func savePresets() {
+    let data = try? JSONEncoder().encode(presets)
+    defaults.set(data, forKey: Keys.presets)
   }
 
   private func saveLensFrame() {
-    guard let frame = lensFrame else {
-      defaults.removeObject(forKey: Keys.lensFrame)
+    saveFrame(lensFrame, forKey: Keys.lensFrame)
+  }
+
+  private func saveAssistantFrame() {
+    saveFrame(assistantFrame, forKey: Keys.assistantFrame)
+  }
+
+  private func saveFrame(_ frame: CGRect?, forKey key: String) {
+    guard let frame else {
+      defaults.removeObject(forKey: key)
       return
     }
 
@@ -138,11 +164,51 @@ final class SettingsStore: ObservableObject {
       "w": frame.size.width,
       "h": frame.size.height
     ]
-    defaults.set(payload, forKey: Keys.lensFrame)
+    defaults.set(payload, forKey: key)
+  }
+
+  private static func loadHotkey(from defaults: UserDefaults, prefix: String) -> HotkeyBinding? {
+    let modifiersKey = "\(prefix).modifiers"
+    let keyCodeKey = "\(prefix).keyCode"
+    guard defaults.object(forKey: modifiersKey) != nil || defaults.object(forKey: keyCodeKey) != nil else {
+      return nil
+    }
+
+    let modifiers = defaults.object(forKey: modifiersKey) as? UInt ?? 0
+    let keyCode = defaults.object(forKey: keyCodeKey) as? Int ?? -1
+    return HotkeyBinding(modifiers: modifiers, keyCode: keyCode)
+  }
+
+  private static func loadLegacyToggleHotkey(from defaults: UserDefaults) -> HotkeyBinding {
+    let modifiers = defaults.object(forKey: Keys.legacyHotkeyModifiers) as? UInt ?? 0
+    let keyCode = defaults.object(forKey: Keys.legacyHotkeyKeyCode) as? Int ?? -1
+    return HotkeyBinding(modifiers: modifiers, keyCode: keyCode)
+  }
+
+  private static func loadPresets(from defaults: UserDefaults) -> [AssistPreset] {
+    guard let data = defaults.data(forKey: Keys.presets),
+          let presets = try? JSONDecoder().decode([AssistPreset].self, from: data)
+    else {
+      return []
+    }
+
+    return presets
   }
 
   private static func loadLensFrame(from defaults: UserDefaults) -> CGRect? {
-    guard let payload = defaults.dictionary(forKey: Keys.lensFrame) as? [String: Double],
+    loadFrame(forKey: Keys.lensFrame, from: defaults)
+  }
+
+  private static func loadOverlayOpacity(from defaults: UserDefaults) -> Double {
+    guard defaults.object(forKey: Keys.overlayOpacity) != nil else {
+      return 0.76
+    }
+
+    return min(max(defaults.double(forKey: Keys.overlayOpacity), 0), 1)
+  }
+
+  private static func loadFrame(forKey key: String, from defaults: UserDefaults) -> CGRect? {
+    guard let payload = defaults.dictionary(forKey: key) as? [String: Double],
           let x = payload["x"],
           let y = payload["y"],
           let w = payload["w"],
@@ -152,56 +218,5 @@ final class SettingsStore: ObservableObject {
     }
 
     return CGRect(x: x, y: y, width: w, height: h)
-  }
-}
-
-extension SettingsStore {
-  var textColorBinding: Binding<Color> {
-    Binding(
-      get: { Color(hex: self.textColorHex) },
-      set: { self.textColorHex = $0.toHex() ?? "#FFFFFF" }
-    )
-  }
-}
-
-extension Color {
-  init(hex: String) {
-    let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-    var int: UInt64 = 0
-    Scanner(string: hex).scanHexInt64(&int)
-    let a, r, g, b: UInt64
-    switch hex.count {
-    case 3:
-      (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-    case 6:
-      (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-    case 8:
-      (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-    default:
-      (a, r, g, b) = (255, 1, 1, 1)
-    }
-
-    self.init(
-      .sRGB,
-      red: Double(r) / 255,
-      green: Double(g) / 255,
-      blue: Double(b) / 255,
-      opacity: Double(a) / 255
-    )
-  }
-
-  func toHex() -> String? {
-    guard let srgbColor = NSColor(self).usingColorSpace(.sRGB),
-          let components = srgbColor.cgColor.components,
-          components.count >= 3
-    else {
-      return nil
-    }
-
-    let r = components[0]
-    let g = components[1]
-    let b = components[2]
-
-    return String(format: "#%02lX%02lX%02lX", lround(r * 255), lround(g * 255), lround(b * 255))
   }
 }

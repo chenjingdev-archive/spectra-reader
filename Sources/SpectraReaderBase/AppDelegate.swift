@@ -24,6 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       onToggleReader: { [weak self] in
         self?.runtimeManager.toggle()
       },
+      onReadNow: { [weak self] in
+        self?.runtimeManager.read()
+      },
+      onAssistNow: { [weak self] in
+        self?.runtimeManager.assist()
+      },
       onShowSettings: { [weak self] in
         self?.settingsWindowController.show()
       }
@@ -53,8 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func setupGlobalHotkeyObservers() {
-    settings.$hotkeyModifiers
-      .combineLatest(settings.$hotkeyKeyCode)
+    settings.$toggleHotkey
+      .combineLatest(settings.$assistHotkey)
       .sink { [weak self] _, _ in
         self?.setupGlobalHotkey()
       }
@@ -67,56 +73,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     globalEventMonitor = nil
     localEventMonitor = nil
 
-    let targetFlags = NSEvent.ModifierFlags(rawValue: settings.hotkeyModifiers)
-    let targetKey = settings.hotkeyKeyCode
-
-    if targetKey == -1 && targetFlags.isEmpty {
+    let hotkeys = configuredHotkeys()
+    if hotkeys.isEmpty {
       return
     }
 
-    if !AccessibilityPermission.isTrusted() {
+    if hotkeys.contains(where: { !$0.hotkey.isEmpty }) && !AccessibilityPermission.isTrusted() {
       PermissionPrompter.shared.requestAccessibilityForHotkeysIfNeeded()
     }
 
-    if targetKey == -1 {
-      let handler: (NSEvent) -> Void = { [weak self] event in
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if flags == targetFlags {
-          self?.runtimeManager.toggle()
-        }
-      }
-
-      globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: handler)
-      localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-        handler(event)
-        return event
-      }
-      return
+    let globalHandler: (NSEvent) -> Void = { [weak self] event in
+      self?.handleHotkeyEvent(event)
     }
 
-    let callback: () -> Void = { [weak self] in
-      Task { @MainActor in
-        self?.runtimeManager.toggle()
-      }
-    }
-
-    let globalHandler: (NSEvent) -> Void = { event in
-      let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-      if event.keyCode == targetKey && flags.isSuperset(of: targetFlags) {
-        callback()
-      }
-    }
-
-    let localHandler: (NSEvent) -> NSEvent? = { event in
-      let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-      if event.keyCode == targetKey && flags.isSuperset(of: targetFlags) {
-        callback()
+    let localHandler: (NSEvent) -> NSEvent? = { [weak self] event in
+      if self?.handleHotkeyEvent(event) == true {
         return nil
       }
       return event
     }
 
-    globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: globalHandler)
-    localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: localHandler)
+    globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .keyDown], handler: globalHandler)
+    localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown], handler: localHandler)
+  }
+
+  private func configuredHotkeys() -> [(hotkey: HotkeyBinding, action: () -> Void)] {
+    [
+      (
+        hotkey: settings.assistHotkey,
+        action: { [weak self] in self?.runtimeManager.assist() }
+      ),
+      (
+        hotkey: settings.toggleHotkey,
+        action: { [weak self] in self?.runtimeManager.toggle() }
+      )
+    ]
+    .filter { !$0.hotkey.isEmpty }
+  }
+
+  @discardableResult
+  private func handleHotkeyEvent(_ event: NSEvent) -> Bool {
+    guard let match = configuredHotkeys().first(where: { matches(event: event, hotkey: $0.hotkey) }) else {
+      return false
+    }
+
+    match.action()
+    return true
+  }
+
+  private func matches(event: NSEvent, hotkey: HotkeyBinding) -> Bool {
+    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    let targetFlags = NSEvent.ModifierFlags(rawValue: hotkey.modifiers)
+
+    if hotkey.keyCode == -1 {
+      return event.type == .flagsChanged && flags == targetFlags
+    }
+
+    return event.type == .keyDown &&
+      Int(event.keyCode) == hotkey.keyCode &&
+      flags.isSuperset(of: targetFlags)
   }
 }

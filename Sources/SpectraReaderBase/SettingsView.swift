@@ -4,80 +4,188 @@ struct SettingsView: View {
   @ObservedObject var settings: SettingsStore
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Color.clear.frame(height: 0).focusable()
+    ScrollView {
+      VStack(alignment: .leading, spacing: 16) {
+        Color.clear.frame(height: 0).focusable()
 
-      Text("Reader Settings")
-        .font(.title3)
+        Text("리더 설정")
+          .font(.title3)
 
-      GroupBox(label: Text("Reader")) {
-        VStack(alignment: .leading, spacing: 12) {
-          Toggle("Enable OCR reader", isOn: $settings.readerEnabled)
-          Toggle("Enable automatic OCR refresh", isOn: $settings.intervalEnabled)
+        GroupBox(label: Text("오버레이")) {
+          VStack(alignment: .leading, spacing: 12) {
+            HStack {
+              Text("투명도")
+                .frame(width: 90, alignment: .leading)
 
-          HStack {
-            Text("Seconds")
-              .frame(width: 70, alignment: .leading)
-            Slider(value: $settings.intervalSeconds, in: 1.0...10, step: 0.5)
-            TextField("Seconds", value: $settings.intervalSeconds, format: .number)
-              .frame(width: 60)
+              Slider(value: $settings.overlayOpacity, in: 0...1)
+
+              Text("\(Int(settings.overlayOpacity * 100))%")
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 48, alignment: .trailing)
+            }
+
+            Toggle("배경 클릭 통과", isOn: $settings.allowsClickThrough)
+
+            if settings.allowsClickThrough {
+              Text("클릭 통과가 켜지면 오버레이 창을 직접 이동하거나 크기를 조절할 수 없습니다.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+            }
+
+            Toggle("OCR 오버레이 텍스트 숨기기", isOn: $settings.hidesOverlayText)
           }
-        }
-        .padding(8)
-      }
-
-      GroupBox(label: Text("Lens")) {
-        VStack(alignment: .leading, spacing: 12) {
-          HStack {
-            Text("Opacity")
-              .frame(width: 70, alignment: .leading)
-            Slider(value: $settings.lensOpacity, in: 0.05...0.9, step: 0.05)
-            Text("\(Int(settings.lensOpacity * 100))%")
-              .frame(width: 50, alignment: .trailing)
-          }
-
-          HStack {
-            Text("Font")
-              .frame(width: 70, alignment: .leading)
-            Slider(value: $settings.fontSizeOffset, in: -5...30, step: 1.0)
-            Text("\(Int(settings.fontSizeOffset))pt")
-              .frame(width: 50, alignment: .trailing)
-          }
-
-          HStack {
-            Text("Color")
-              .frame(width: 70, alignment: .leading)
-            ColorPicker("", selection: settings.textColorBinding)
-              .labelsHidden()
-            Spacer()
-          }
-
-          HStack {
-            Text("Tracking")
-              .frame(width: 70, alignment: .leading)
-            Slider(value: $settings.letterSpacing, in: -2...10, step: 0.1)
-            Text(String(format: "%.1f", settings.letterSpacing))
-              .frame(width: 50, alignment: .trailing)
-          }
-        }
-        .padding(8)
-      }
-
-      GroupBox(label: Text("Global Hotkey")) {
-        HotkeyRecorder(settings: settings)
           .padding(8)
-      }
+        }
 
+        GroupBox(label: Text("Codex 연결")) {
+          VStack(alignment: .leading, spacing: 10) {
+            TextField("고급: 외부 헬퍼 명령어", text: $settings.helperCommandPath)
+              .textFieldStyle(.roundedBorder)
+
+            Text("비워두면 설치된 `codex` CLI를 직접 사용합니다. 이 입력칸은 정말 다른 헬퍼를 붙일 때만 사용하세요.")
+              .font(.footnote)
+              .foregroundColor(.secondary)
+          }
+          .padding(8)
+        }
+
+        GroupBox(label: Text("프리셋")) {
+          VStack(alignment: .leading, spacing: 12) {
+            HStack {
+              Picker("현재 프리셋", selection: $settings.selectedPresetID) {
+                ForEach(settings.presets) { preset in
+                  Text(preset.name).tag(preset.id)
+                }
+              }
+              .pickerStyle(.menu)
+
+              Spacer()
+
+              Button("추가") {
+                settings.addPreset()
+              }
+
+              Button("삭제") {
+                settings.removeSelectedPreset()
+              }
+              .disabled(settings.selectedPreset?.isBuiltIn ?? true)
+            }
+
+            TextField("프리셋 이름", text: selectedPresetName)
+              .textFieldStyle(.roundedBorder)
+
+            TextEditor(text: selectedPresetPrompt)
+              .font(.system(size: 13))
+              .frame(minHeight: 130)
+              .padding(6)
+              .background(Color(nsColor: .textBackgroundColor))
+              .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            if let preset = settings.selectedPreset {
+              Text(preset.isBuiltIn ? "기본 프리셋" : "사용자 프리셋")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+            }
+          }
+          .padding(8)
+        }
+
+        GroupBox(label: Text("단축키")) {
+          VStack(alignment: .leading, spacing: 12) {
+            hotkeyRow(
+              title: "오버레이 표시/숨기기",
+              modifiers: toggleHotkeyModifiers,
+              keyCode: toggleHotkeyKeyCode
+            )
+
+            hotkeyRow(
+              title: "현재 프리셋 도움 실행",
+              modifiers: assistHotkeyModifiers,
+              keyCode: assistHotkeyKeyCode
+            )
+          }
+          .padding(8)
+        }
+      }
+      .padding(18)
+    }
+    .frame(width: 460)
+  }
+}
+
+private extension SettingsView {
+  var selectedPresetName: Binding<String> {
+    Binding(
+      get: { settings.selectedPreset?.name ?? "" },
+      set: { settings.updateSelectedPresetName($0) }
+    )
+  }
+
+  var selectedPresetPrompt: Binding<String> {
+    Binding(
+      get: { settings.selectedPreset?.promptTemplate ?? "" },
+      set: { settings.updateSelectedPresetPrompt($0) }
+    )
+  }
+
+  var toggleHotkeyModifiers: Binding<UInt> {
+    Binding(
+      get: { settings.toggleHotkey.modifiers },
+      set: {
+        var hotkey = settings.toggleHotkey
+        hotkey.modifiers = $0
+        settings.toggleHotkey = hotkey
+      }
+    )
+  }
+
+  var toggleHotkeyKeyCode: Binding<Int> {
+    Binding(
+      get: { settings.toggleHotkey.keyCode },
+      set: {
+        var hotkey = settings.toggleHotkey
+        hotkey.keyCode = $0
+        settings.toggleHotkey = hotkey
+      }
+    )
+  }
+
+  var assistHotkeyModifiers: Binding<UInt> {
+    Binding(
+      get: { settings.assistHotkey.modifiers },
+      set: {
+        var hotkey = settings.assistHotkey
+        hotkey.modifiers = $0
+        settings.assistHotkey = hotkey
+      }
+    )
+  }
+
+  var assistHotkeyKeyCode: Binding<Int> {
+    Binding(
+      get: { settings.assistHotkey.keyCode },
+      set: {
+        var hotkey = settings.assistHotkey
+        hotkey.keyCode = $0
+        settings.assistHotkey = hotkey
+      }
+    )
+  }
+
+  func hotkeyRow(title: String, modifiers: Binding<UInt>, keyCode: Binding<Int>) -> some View {
+    HStack {
+      Text(title)
+        .frame(width: 140, alignment: .leading)
+      HotkeyRecorder(modifiers: modifiers, keyCode: keyCode)
       Spacer()
     }
-    .padding(18)
-    .frame(width: 380)
-    .fixedSize()
   }
 }
 
 struct HotkeyRecorder: View {
-  @ObservedObject var settings: SettingsStore
+  @Binding var modifiers: UInt
+  @Binding var keyCode: Int
   @State private var isRecording = false
   @State private var pressedModifiers: NSEvent.ModifierFlags = []
   @State private var maxModifiers: NSEvent.ModifierFlags = []
@@ -96,7 +204,7 @@ struct HotkeyRecorder: View {
             .stroke(isRecording ? Color.accentColor : Color(NSColor.separatorColor), lineWidth: 1)
         )
 
-      Button(isRecording ? "Press Keys..." : "Record") {
+      Button(isRecording ? "키를 누르세요..." : "입력") {
         if isRecording {
           stopRecording()
         } else {
@@ -109,15 +217,15 @@ struct HotkeyRecorder: View {
   private var displayString: String {
     if isRecording {
       if pressedModifiers.isEmpty && maxModifiers.isEmpty {
-        return "Type shortcut"
+        return "단축키 입력"
       }
       return modifiersString(from: pressedModifiers.isEmpty ? maxModifiers.rawValue : pressedModifiers.rawValue)
     }
 
-    let mods = modifiersString(from: settings.hotkeyModifiers)
-    let key = settings.hotkeyKeyCode == -1 ? "" : keyString(from: settings.hotkeyKeyCode)
+    let mods = modifiersString(from: modifiers)
+    let key = keyCode == -1 ? "" : keyString(from: keyCode)
     if mods.isEmpty && key.isEmpty {
-      return "None"
+      return "없음"
     }
     return "\(mods)\(key)".trimmingCharacters(in: .whitespaces)
   }
@@ -134,9 +242,9 @@ struct HotkeyRecorder: View {
 
   private func keyString(from code: Int) -> String {
     switch code {
-    case 49: return "Space"
-    case 36: return "Return"
-    case 51: return "Delete"
+    case 49: return "스페이스"
+    case 36: return "리턴"
+    case 51: return "삭제"
     case 53: return "Esc"
     case 123: return "←"
     case 124: return "→"
@@ -180,8 +288,8 @@ struct HotkeyRecorder: View {
 
         if flags.isEmpty && !self.maxModifiers.isEmpty {
           DispatchQueue.main.async {
-            self.settings.hotkeyModifiers = self.maxModifiers.rawValue
-            self.settings.hotkeyKeyCode = -1
+            self.modifiers = self.maxModifiers.rawValue
+            self.keyCode = -1
             self.stopRecording()
           }
         }
@@ -193,8 +301,8 @@ struct HotkeyRecorder: View {
         let keyCode = Int(event.keyCode)
 
         DispatchQueue.main.async {
-          self.settings.hotkeyModifiers = flags.rawValue
-          self.settings.hotkeyKeyCode = keyCode
+          self.modifiers = flags.rawValue
+          self.keyCode = keyCode
           self.stopRecording()
         }
         return nil

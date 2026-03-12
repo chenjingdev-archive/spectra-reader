@@ -5,6 +5,8 @@ protocol ReaderRuntime: AnyObject {
   var isVisible: Bool { get }
 
   func show()
+  func readNow()
+  func assistNow()
   func persistWindowState()
   func stopReader(clearContent: Bool)
   func shutdownWindow()
@@ -13,37 +15,58 @@ protocol ReaderRuntime: AnyObject {
 @MainActor
 final class DefaultReaderRuntime: ReaderRuntime {
   private let settings: SettingsStore
+  private let viewModel: ReaderViewModel
   private let readerWindow: ReaderWindowController
+  private let assistantWindow: AssistantWindowController
   private let readerCoordinator: ReaderCoordinator
 
   init(settings: SettingsStore, openSettings: @escaping () -> Void) {
     self.settings = settings
-    readerWindow = ReaderWindowController(settings: settings)
+    viewModel = ReaderViewModel()
+    let overlayWindow = ReaderWindowController(settings: settings, viewModel: viewModel)
+    readerWindow = overlayWindow
+    assistantWindow = AssistantWindowController(
+      settings: settings,
+      viewModel: viewModel,
+      anchorFrameProvider: { overlayWindow.window.frame }
+    )
     readerCoordinator = ReaderCoordinator(
       settings: settings,
-      readerWindow: readerWindow
+      readerWindow: overlayWindow
     )
 
-    readerWindow.settingsLauncher = openSettings
-    readerWindow.onMoveEnd = { [weak self] in
-      guard let self else { return }
-      guard self.settings.readerEnabled else { return }
-      self.readerCoordinator.readNow(trigger: .moveEnd)
+    assistantWindow.settingsLauncher = openSettings
+    assistantWindow.onReadRequested = { [weak self] in
+      _ = self?.readerCoordinator.readNow()
+    }
+    assistantWindow.onAssistRequested = { [weak self] in
+      _ = self?.readerCoordinator.assistNow()
     }
   }
 
   var isVisible: Bool {
-    readerWindow.isVisible
+    readerWindow.isVisible || assistantWindow.isVisible
   }
 
   func show() {
     readerWindow.show()
+    assistantWindow.show()
     readerCoordinator.startIfNeeded()
-    readerCoordinator.readNow(trigger: .manual)
+  }
+
+  func readNow() {
+    show()
+    _ = readerCoordinator.readNow()
+  }
+
+  func assistNow() {
+    show()
+    _ = readerCoordinator.assistNow()
   }
 
   func persistWindowState() {
     readerWindow.persistFrame()
+    assistantWindow.persistFrame()
   }
 
   func stopReader(clearContent: Bool) {
@@ -52,6 +75,7 @@ final class DefaultReaderRuntime: ReaderRuntime {
 
   func shutdownWindow() {
     readerWindow.shutdown()
+    assistantWindow.shutdown()
   }
 }
 
@@ -99,5 +123,27 @@ final class ReaderRuntimeManager {
     } else {
       show()
     }
+  }
+
+  func read() {
+    if let runtime {
+      runtime.readNow()
+      return
+    }
+
+    let runtime = makeRuntime()
+    self.runtime = runtime
+    runtime.readNow()
+  }
+
+  func assist() {
+    if let runtime {
+      runtime.assistNow()
+      return
+    }
+
+    let runtime = makeRuntime()
+    self.runtime = runtime
+    runtime.assistNow()
   }
 }

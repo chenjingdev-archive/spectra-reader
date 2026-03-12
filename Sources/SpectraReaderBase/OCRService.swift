@@ -5,11 +5,10 @@ import CoreGraphics
 struct OCRService: OCRRecognizing {
   func recognizeTextBlocks(in cgImage: CGImage) throws -> [TextBlock] {
     let request = VNRecognizeTextRequest()
-    request.recognitionLanguages = ["en-US", "ko-KR"]
+    request.recognitionLanguages = ["ko-KR", "en-US"]
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = false
     request.minimumTextHeight = 0.008
-    request.revision = VNRecognizeTextRequestRevision3
 
     let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
     try handler.perform([request])

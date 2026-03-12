@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-struct TextBlock: Identifiable {
+struct TextBlock: Identifiable, Codable, Equatable, Sendable {
   let id: UUID
   let text: String
   let boundingBox: CGRect

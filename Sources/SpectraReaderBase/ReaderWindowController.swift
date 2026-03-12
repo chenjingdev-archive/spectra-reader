@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreGraphics
 import SwiftUI
 
@@ -8,13 +9,11 @@ final class ReaderWindowController: NSObject, NSWindowDelegate, ReaderWindowing 
   let viewModel: ReaderViewModel
 
   private let settings: SettingsStore
-  var onMoveEnd: (() -> Void)?
-  var settingsLauncher: (() -> Void)?
-  private var moveDebounce: DispatchWorkItem?
+  private var cancellables = Set<AnyCancellable>()
 
-  init(settings: SettingsStore) {
+  init(settings: SettingsStore, viewModel: ReaderViewModel) {
     self.settings = settings
-    self.viewModel = ReaderViewModel()
+    self.viewModel = viewModel
 
     let initialFrame = Self.resolveInitialFrame(settings.lensFrame)
     window = NSPanel(
@@ -44,16 +43,13 @@ final class ReaderWindowController: NSObject, NSWindowDelegate, ReaderWindowing 
     window.standardWindowButton(.zoomButton)?.isHidden = true
 
     let hosting = NSHostingView(
-      rootView: ReaderView(
-        viewModel: viewModel,
-        settings: settings,
-        onOpenSettings: { [weak self] in
-          self?.settingsLauncher?()
-        }
-      )
+      rootView: ReaderView(viewModel: viewModel, settings: settings)
     )
     hosting.translatesAutoresizingMaskIntoConstraints = false
     window.contentView = hosting
+    window.ignoresMouseEvents = settings.allowsClickThrough
+
+    bindSettings()
   }
 
   var isVisible: Bool {
@@ -71,8 +67,6 @@ final class ReaderWindowController: NSObject, NSWindowDelegate, ReaderWindowing 
 
   func shutdown() {
     persistFrame()
-    moveDebounce?.cancel()
-    moveDebounce = nil
     window.orderOut(nil)
     window.delegate = nil
     window.contentView = nil
@@ -86,7 +80,6 @@ final class ReaderWindowController: NSObject, NSWindowDelegate, ReaderWindowing 
 
     let rectInWindow = contentView.convert(contentView.bounds, to: nil)
     var rect = window.convertToScreen(rectInWindow)
-    rect = rect.insetBy(dx: 8, dy: 8)
 
     if let primaryScreenHeight = NSScreen.screens.first?.frame.height {
       rect.origin.y = primaryScreenHeight - rect.maxY
@@ -101,21 +94,18 @@ final class ReaderWindowController: NSObject, NSWindowDelegate, ReaderWindowing 
 
   func windowDidMove(_ notification: Notification) {
     settings.lensFrame = window.frame
-    scheduleMoveEnd()
   }
 
   func windowDidResize(_ notification: Notification) {
     settings.lensFrame = window.frame
-    scheduleMoveEnd()
   }
 
-  private func scheduleMoveEnd() {
-    moveDebounce?.cancel()
-    let workItem = DispatchWorkItem { [weak self] in
-      self?.onMoveEnd?()
-    }
-    moveDebounce = workItem
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
+  private func bindSettings() {
+    settings.$allowsClickThrough
+      .sink { [weak self] allowsClickThrough in
+        self?.window.ignoresMouseEvents = allowsClickThrough
+      }
+      .store(in: &cancellables)
   }
 
   private static func defaultFrame() -> CGRect {

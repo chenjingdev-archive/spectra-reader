@@ -18,6 +18,10 @@ protocol OCRRecognizing: Sendable {
   func recognizeTextBlocks(in cgImage: CGImage) throws -> [TextBlock]
 }
 
+protocol AssistantProviding: Sendable {
+  func run(snapshot: ReadingSnapshot, preset: AssistPreset) async throws -> AssistantResult
+}
+
 @MainActor
 protocol ScreenRecordingPrompting {
   func requestScreenRecordingIfNeeded()
