@@ -24,12 +24,16 @@ final class SettingsStore: ObservableObject {
     didSet { defaults.set(hidesOverlayText, forKey: Keys.hidesOverlayText) }
   }
 
-  @Published var toggleHotkey: HotkeyBinding {
-    didSet { saveHotkey(toggleHotkey, prefix: Keys.toggleHotkey) }
+  @Published var snapshotHotkey: HotkeyBinding {
+    didSet { saveHotkey(snapshotHotkey, prefix: Keys.snapshotHotkey) }
   }
 
   @Published var assistHotkey: HotkeyBinding {
     didSet { saveHotkey(assistHotkey, prefix: Keys.assistHotkey) }
+  }
+
+  @Published var resetHotkey: HotkeyBinding {
+    didSet { saveHotkey(resetHotkey, prefix: Keys.resetHotkey) }
   }
 
   @Published var helperCommandPath: String {
@@ -63,8 +67,12 @@ final class SettingsStore: ObservableObject {
     overlayOpacity = Self.loadOverlayOpacity(from: defaults)
     allowsClickThrough = defaults.bool(forKey: Keys.allowsClickThrough)
     hidesOverlayText = defaults.bool(forKey: Keys.hidesOverlayText)
-    toggleHotkey = Self.loadHotkey(from: defaults, prefix: Keys.toggleHotkey) ?? Self.loadLegacyToggleHotkey(from: defaults)
+    snapshotHotkey =
+      Self.loadHotkey(from: defaults, prefix: Keys.snapshotHotkey) ??
+      Self.loadHotkey(from: defaults, prefix: LegacyKeys.toggleHotkey) ??
+      Self.loadLegacySnapshotHotkey(from: defaults)
     assistHotkey = Self.loadHotkey(from: defaults, prefix: Keys.assistHotkey) ?? .none
+    resetHotkey = Self.loadHotkey(from: defaults, prefix: Keys.resetHotkey) ?? .none
     helperCommandPath = defaults.string(forKey: Keys.helperCommandPath) ?? ""
     presets = initialPresets
     selectedPresetID = defaults.string(forKey: Keys.selectedPresetID) ?? initialPresets.first?.id ?? ""
@@ -104,11 +112,16 @@ final class SettingsStore: ObservableObject {
     static let overlayOpacity = "overlayOpacity"
     static let allowsClickThrough = "allowsClickThrough"
     static let hidesOverlayText = "hidesOverlayText"
-    static let toggleHotkey = "toggleHotkey"
+    static let snapshotHotkey = "snapshotHotkey"
     static let assistHotkey = "assistHotkey"
+    static let resetHotkey = "resetHotkey"
     static let helperCommandPath = "helperCommandPath"
     static let selectedPresetID = "selectedPresetID"
     static let presets = "presets"
+  }
+
+  private enum LegacyKeys {
+    static let toggleHotkey = "toggleHotkey"
     static let legacyHotkeyModifiers = "hotkeyModifiers"
     static let legacyHotkeyKeyCode = "hotkeyKeyCode"
   }
@@ -179,9 +192,9 @@ final class SettingsStore: ObservableObject {
     return HotkeyBinding(modifiers: modifiers, keyCode: keyCode)
   }
 
-  private static func loadLegacyToggleHotkey(from defaults: UserDefaults) -> HotkeyBinding {
-    let modifiers = defaults.object(forKey: Keys.legacyHotkeyModifiers) as? UInt ?? 0
-    let keyCode = defaults.object(forKey: Keys.legacyHotkeyKeyCode) as? Int ?? -1
+  private static func loadLegacySnapshotHotkey(from defaults: UserDefaults) -> HotkeyBinding {
+    let modifiers = defaults.object(forKey: LegacyKeys.legacyHotkeyModifiers) as? UInt ?? 0
+    let keyCode = defaults.object(forKey: LegacyKeys.legacyHotkeyKeyCode) as? Int ?? -1
     return HotkeyBinding(modifiers: modifiers, keyCode: keyCode)
   }
 

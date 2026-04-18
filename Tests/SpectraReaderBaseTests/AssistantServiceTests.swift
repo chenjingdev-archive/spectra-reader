@@ -24,4 +24,26 @@ struct AssistantServiceTests {
     let root = CodexCLIService.projectRootURL()
     #expect(root.lastPathComponent == "spectra-reader")
   }
+
+  @Test
+  func codexExecutionRootUsesScratchDirectory() {
+    let root = CodexCLIService.executionRootURL()
+    #expect(root.lastPathComponent == "spectra-reader-assistant")
+  }
+
+  @Test
+  func codexCLIUsesGPT54AndLeanExecFlags() {
+    let arguments = CodexCLIService.commandArguments()
+
+    #expect(arguments.contains("gpt-5.4"))
+    #expect(arguments.contains("--json"))
+    #expect(arguments.contains("apps"))
+    #expect(arguments.contains("multi_agent"))
+    #expect(arguments.contains("js_repl"))
+    #expect(arguments.contains("unified_exec"))
+    #expect(arguments.contains("shell_snapshot"))
+    #expect(arguments.contains("mcp_servers.chrome-devtools.enabled=false"))
+    #expect(arguments.contains("model_reasoning_effort=\"low\""))
+    #expect(arguments.contains(CodexCLIService.executionRootURL().path))
+  }
 }

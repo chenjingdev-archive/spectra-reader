@@ -6,7 +6,11 @@ protocol ReaderRuntime: AnyObject {
 
   func show()
   func readNow()
+  func readMoreNow()
   func assistNow()
+  func assistSessionNow()
+  func resetReadingSession()
+  func cancelAssistIfRunning() -> Bool
   func persistWindowState()
   func stopReader(clearContent: Bool)
   func shutdownWindow()
@@ -36,7 +40,7 @@ final class DefaultReaderRuntime: ReaderRuntime {
     )
 
     assistantWindow.settingsLauncher = openSettings
-    assistantWindow.onReadRequested = { [weak self] in
+    assistantWindow.onSnapshotRequested = { [weak self] in
       _ = self?.readerCoordinator.readNow()
     }
     assistantWindow.onAssistRequested = { [weak self] in
@@ -59,9 +63,28 @@ final class DefaultReaderRuntime: ReaderRuntime {
     _ = readerCoordinator.readNow()
   }
 
+  func readMoreNow() {
+    show()
+    _ = readerCoordinator.readMoreNow()
+  }
+
   func assistNow() {
     show()
     _ = readerCoordinator.assistNow()
+  }
+
+  func assistSessionNow() {
+    show()
+    _ = readerCoordinator.assistSessionNow()
+  }
+
+  func resetReadingSession() {
+    show()
+    readerCoordinator.resetReadingSession()
+  }
+
+  func cancelAssistIfRunning() -> Bool {
+    readerCoordinator.cancelAssistIfRunning()
   }
 
   func persistWindowState() {
@@ -136,7 +159,22 @@ final class ReaderRuntimeManager {
     runtime.readNow()
   }
 
+  func readMore() {
+    if let runtime {
+      runtime.readMoreNow()
+      return
+    }
+
+    let runtime = makeRuntime()
+    self.runtime = runtime
+    runtime.readMoreNow()
+  }
+
   func assist() {
+    if cancelAssistIfRunning() {
+      return
+    }
+
     if let runtime {
       runtime.assistNow()
       return
@@ -145,5 +183,31 @@ final class ReaderRuntimeManager {
     let runtime = makeRuntime()
     self.runtime = runtime
     runtime.assistNow()
+  }
+
+  func assistSession() {
+    if let runtime {
+      runtime.assistSessionNow()
+      return
+    }
+
+    let runtime = makeRuntime()
+    self.runtime = runtime
+    runtime.assistSessionNow()
+  }
+
+  func resetReadingSession() {
+    if let runtime {
+      runtime.resetReadingSession()
+      return
+    }
+
+    let runtime = makeRuntime()
+    self.runtime = runtime
+    runtime.resetReadingSession()
+  }
+
+  func cancelAssistIfRunning() -> Bool {
+    runtime?.cancelAssistIfRunning() ?? false
   }
 }

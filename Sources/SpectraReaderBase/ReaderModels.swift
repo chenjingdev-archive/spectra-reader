@@ -73,6 +73,61 @@ struct ReadingSnapshot: Equatable, Sendable {
   }
 }
 
+struct ReadingChunk: Identifiable, Equatable, Sendable {
+  let id: String
+  let text: String
+
+  init(id: String = UUID().uuidString, text: String) {
+    self.id = id
+    self.text = text
+  }
+}
+
+struct ReadingSession: Equatable, Sendable {
+  static let overlapWindow = 12
+
+  let id: String
+  let createdAt: Date
+  let updatedAt: Date
+  let snapshotCount: Int
+  let chunks: [ReadingChunk]
+  let tailLines: [String]
+
+  init(
+    id: String = UUID().uuidString,
+    createdAt: Date = Date(),
+    updatedAt: Date = Date(),
+    snapshotCount: Int = 1,
+    chunks: [ReadingChunk],
+    tailLines: [String]
+  ) {
+    self.id = id
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.snapshotCount = snapshotCount
+    self.chunks = chunks
+    self.tailLines = Array(tailLines.suffix(Self.overlapWindow))
+  }
+
+  var hasContent: Bool {
+    !chunks.isEmpty
+  }
+
+  var text: String {
+    chunks.map(\.text).joined(separator: "\n")
+  }
+
+  func asSnapshot(sourceRect: CGRect) -> ReadingSnapshot {
+    ReadingSnapshot(
+      id: id,
+      capturedAt: updatedAt,
+      blocks: [],
+      plainText: text,
+      sourceRect: sourceRect
+    )
+  }
+}
+
 struct AssistantResult: Equatable, Sendable {
   let presetID: String
   let snapshotID: String

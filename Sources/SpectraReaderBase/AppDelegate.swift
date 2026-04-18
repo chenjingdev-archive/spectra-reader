@@ -24,11 +24,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       onToggleReader: { [weak self] in
         self?.runtimeManager.toggle()
       },
-      onReadNow: { [weak self] in
+      onSnapshotNow: { [weak self] in
         self?.runtimeManager.read()
       },
       onAssistNow: { [weak self] in
         self?.runtimeManager.assist()
+      },
+      onResetNow: { [weak self] in
+        self?.runtimeManager.resetReadingSession()
       },
       onShowSettings: { [weak self] in
         self?.settingsWindowController.show()
@@ -59,9 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func setupGlobalHotkeyObservers() {
-    settings.$toggleHotkey
-      .combineLatest(settings.$assistHotkey)
-      .sink { [weak self] _, _ in
+    settings.$snapshotHotkey
+      .combineLatest(settings.$assistHotkey, settings.$resetHotkey)
+      .sink { [weak self] _, _, _ in
         self?.setupGlobalHotkey()
       }
       .store(in: &cancellables)
@@ -100,12 +103,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private func configuredHotkeys() -> [(hotkey: HotkeyBinding, action: () -> Void)] {
     [
       (
+        hotkey: settings.snapshotHotkey,
+        action: { [weak self] in self?.runtimeManager.read() }
+      ),
+      (
         hotkey: settings.assistHotkey,
         action: { [weak self] in self?.runtimeManager.assist() }
       ),
       (
-        hotkey: settings.toggleHotkey,
-        action: { [weak self] in self?.runtimeManager.toggle() }
+        hotkey: settings.resetHotkey,
+        action: { [weak self] in self?.runtimeManager.resetReadingSession() }
       )
     ]
     .filter { !$0.hotkey.isEmpty }

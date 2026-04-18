@@ -8,7 +8,7 @@ final class AssistantWindowController: NSObject, NSWindowDelegate {
   private let settings: SettingsStore
   private let anchorFrameProvider: () -> CGRect
   private let viewModel: ReaderViewModel
-  var onReadRequested: (() -> Void)?
+  var onSnapshotRequested: (() -> Void)?
   var onAssistRequested: (() -> Void)?
   var settingsLauncher: (() -> Void)?
 
@@ -47,8 +47,8 @@ final class AssistantWindowController: NSObject, NSWindowDelegate {
     let hosting = NSHostingView(
       rootView: AssistantPanelView(
         viewModel: viewModel,
-        onRead: { [weak self] in
-          self?.onReadRequested?()
+        onSnapshot: { [weak self] in
+          self?.onSnapshotRequested?()
         },
         onAssist: { [weak self] in
           self?.onAssistRequested?()

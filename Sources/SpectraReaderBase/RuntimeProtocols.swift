@@ -18,8 +18,16 @@ protocol OCRRecognizing: Sendable {
   func recognizeTextBlocks(in cgImage: CGImage) throws -> [TextBlock]
 }
 
+enum AssistantStreamEvent: Sendable, Equatable {
+  case textDelta(String)
+}
+
 protocol AssistantProviding: Sendable {
-  func run(snapshot: ReadingSnapshot, preset: AssistPreset) async throws -> AssistantResult
+  func run(
+    snapshot: ReadingSnapshot,
+    preset: AssistPreset,
+    onEvent: @escaping @Sendable (AssistantStreamEvent) -> Void
+  ) async throws -> AssistantResult
 }
 
 @MainActor

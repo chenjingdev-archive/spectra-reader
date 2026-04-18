@@ -2,17 +2,20 @@ import SwiftUI
 
 struct AssistantPanelView: View {
   @ObservedObject var viewModel: ReaderViewModel
-  let onRead: () -> Void
+  let onSnapshot: () -> Void
   let onAssist: () -> Void
   let onOpenSettings: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      header
-      assistantBody
-      sourcePreview
+    ScrollView {
+      VStack(alignment: .leading, spacing: 14) {
+        header
+        actionBar
+        assistantSection
+        sourceSection
+      }
+      .padding(16)
     }
-    .padding(16)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .background(
       LinearGradient(
@@ -28,7 +31,7 @@ struct AssistantPanelView: View {
       StatusPill(
         text: viewModel.statusText,
         isBusy: viewModel.isBusy,
-        hasError: viewModel.lastError != nil
+        hasError: viewModel.lastError != nil || viewModel.assistantError != nil
       )
 
       if !viewModel.currentPresetName.isEmpty {
@@ -45,80 +48,151 @@ struct AssistantPanelView: View {
     }
   }
 
-  private var assistantBody: some View {
+  private var actionBar: some View {
+    HStack(spacing: 8) {
+      Button("스냅샷", action: onSnapshot)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .disabled(viewModel.isBusy)
+
+      Button(viewModel.canCancelAssist ? "취소" : "도움", action: onAssist)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .disabled((!viewModel.canCancelAssist && sourceChunks.isEmpty) || (viewModel.isBusy && !viewModel.canCancelAssist))
+
+      Spacer()
+
+      Button("설정", action: onOpenSettings)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+  }
+
+  private var assistantSection: some View {
+    infoSection(
+      title: "도움",
+      timestamp: assistantTimestamp,
+      detail: assistantDetail,
+      text: viewModel.assistantText,
+      error: viewModel.assistantError,
+      emptyText: "도움을 실행하면 누적된 스냅샷으로 AI를 호출합니다. 원문은 초기화 전까지 유지됩니다."
+    )
+  }
+
+  private var sourceSection: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack {
-        Text("도움")
+      HStack(alignment: .firstTextBaseline) {
+        Text("원문")
           .font(.headline)
 
         Spacer()
 
-        if let lastSnapshotAt = viewModel.lastSnapshotAt {
-          Text(lastSnapshotAt, style: .time)
+        if let detail = sourceDetail, !detail.isEmpty {
+          Text(detail)
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .foregroundColor(.secondary)
+        }
+
+        if let timestamp = sourceTimestamp {
+          Text(timestamp, style: .time)
+            .font(.system(size: 11, weight: .regular, design: .monospaced))
+            .foregroundColor(.secondary)
+        }
+      }
+
+      if sourceChunks.isEmpty {
+        Text("스냅샷을 누를 때마다 원문이 여기에 계속 이어 붙습니다.")
+          .font(.system(size: 13, weight: .regular))
+          .foregroundColor(.secondary)
+          .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
+      } else {
+        LazyVStack(alignment: .leading, spacing: 8) {
+          ForEach(sourceChunks) { chunk in
+            Text(verbatim: chunk.text)
+              .foregroundColor(.primary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+        }
+        .font(.system(size: 13, weight: .regular))
+        .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
+        .textSelection(.enabled)
+      }
+    }
+    .padding(14)
+    .background(Color.primary.opacity(0.04))
+    .clipShape(RoundedRectangle(cornerRadius: 14))
+  }
+
+  private func infoSection(
+    title: String,
+    timestamp: Date?,
+    detail: String?,
+    text: String,
+    error: String?,
+    emptyText: String
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(alignment: .firstTextBaseline) {
+        Text(title)
+          .font(.headline)
+
+        Spacer()
+
+        if let detail, !detail.isEmpty {
+          Text(detail)
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .foregroundColor(.secondary)
+        }
+
+        if let timestamp {
+          Text(timestamp, style: .time)
             .font(.system(size: 11, weight: .regular, design: .monospaced))
             .foregroundColor(.secondary)
         }
       }
 
       Group {
-        if !viewModel.assistantText.isEmpty {
-          Text(viewModel.assistantText)
+        if !text.isEmpty {
+          Text(verbatim: text)
             .foregroundColor(.primary)
-        } else if let lastError = viewModel.lastError {
-          Text(lastError)
+        } else if let error {
+          Text(verbatim: error)
             .foregroundColor(.orange)
-        } else if viewModel.lastSnapshotAt == nil {
-          Text("선택된 프리셋으로 현재 오버레이 영역을 읽으려면 '도움'을 누르세요.")
-            .foregroundColor(.secondary)
         } else {
-          Text("도움 실행 시 최근 OCR 스냅샷을 재사용해 현재 프리셋을 다시 실행합니다.")
+          Text(verbatim: emptyText)
             .foregroundColor(.secondary)
         }
       }
       .font(.system(size: 13, weight: .regular))
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
+      .textSelection(.enabled)
     }
     .padding(14)
-    .frame(maxWidth: .infinity, minHeight: 180, alignment: .topLeading)
     .background(Color.primary.opacity(0.04))
     .clipShape(RoundedRectangle(cornerRadius: 14))
   }
+}
 
-  private var sourcePreview: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack {
-        Text("원문 미리보기")
-          .font(.headline)
+private extension AssistantPanelView {
+  var sourceChunks: [ReadingChunk] {
+    viewModel.sessionChunks
+  }
 
-        Spacer()
+  var sourceTimestamp: Date? {
+    viewModel.sessionLastUpdatedAt
+  }
 
-        Button("읽기", action: onRead)
-          .buttonStyle(.borderedProminent)
-          .controlSize(.small)
-          .disabled(viewModel.isBusy)
+  var sourceDetail: String? {
+    guard viewModel.sessionSnapshotCount > 0 else { return nil }
+    return "\(viewModel.sessionSnapshotCount)개 스냅샷"
+  }
 
-        Button("도움", action: onAssist)
-          .buttonStyle(.borderedProminent)
-          .controlSize(.small)
-          .disabled(viewModel.isBusy)
+  var assistantTimestamp: Date? {
+    viewModel.lastAssistantAt
+  }
 
-        Button("설정", action: onOpenSettings)
-          .buttonStyle(.bordered)
-          .controlSize(.small)
-      }
-
-      ScrollView {
-        Text(viewModel.recognizedText.isEmpty ? "아직 OCR 스냅샷이 없습니다." : viewModel.recognizedText)
-          .font(.system(size: 12, weight: .regular, design: .monospaced))
-          .foregroundColor(viewModel.recognizedText.isEmpty ? .secondary : .primary)
-          .frame(maxWidth: .infinity, alignment: .topLeading)
-          .textSelection(.enabled)
-      }
-      .frame(maxWidth: .infinity, minHeight: 110, maxHeight: .infinity, alignment: .topLeading)
-    }
-    .padding(14)
-    .background(Color.primary.opacity(0.04))
-    .clipShape(RoundedRectangle(cornerRadius: 14))
+  var assistantDetail: String? {
+    viewModel.assistantText.isEmpty && viewModel.assistantError == nil ? nil : "AI 결과"
   }
 }
 

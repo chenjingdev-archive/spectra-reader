@@ -16,7 +16,9 @@ struct SettingsStoreTests {
     store.allowsClickThrough = true
     store.hidesOverlayText = true
     store.helperCommandPath = "/tmp/helper"
+    store.snapshotHotkey = HotkeyBinding(modifiers: UInt(1 << 18), keyCode: 1)
     store.assistHotkey = HotkeyBinding(modifiers: UInt(1 << 20), keyCode: 36)
+    store.resetHotkey = HotkeyBinding(modifiers: UInt(1 << 17), keyCode: 53)
     store.addPreset()
     store.updateSelectedPresetName("커스텀")
     store.updateSelectedPresetPrompt("이 화면을 천천히 설명해줘.")
@@ -28,7 +30,9 @@ struct SettingsStoreTests {
     #expect(reloaded.allowsClickThrough == true)
     #expect(reloaded.hidesOverlayText == true)
     #expect(reloaded.helperCommandPath == "/tmp/helper")
+    #expect(reloaded.snapshotHotkey == HotkeyBinding(modifiers: UInt(1 << 18), keyCode: 1))
     #expect(reloaded.assistHotkey == HotkeyBinding(modifiers: UInt(1 << 20), keyCode: 36))
+    #expect(reloaded.resetHotkey == HotkeyBinding(modifiers: UInt(1 << 17), keyCode: 53))
     #expect(reloaded.selectedPresetID == selectedID)
     #expect(reloaded.selectedPreset?.name == "커스텀")
     #expect(reloaded.selectedPreset?.promptTemplate == "이 화면을 천천히 설명해줘.")

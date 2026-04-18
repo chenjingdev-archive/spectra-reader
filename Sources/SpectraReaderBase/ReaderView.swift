@@ -6,17 +6,12 @@ struct ReaderView: View {
 
   var body: some View {
     ZStack {
-      RoundedRectangle(cornerRadius: 16)
+      Rectangle()
         .fill(Color.black.opacity(settings.overlayOpacity))
 
       readingSurface
         .padding(8)
     }
-    .clipShape(RoundedRectangle(cornerRadius: 16))
-    .overlay(
-      RoundedRectangle(cornerRadius: 16)
-        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-    )
     .ignoresSafeArea()
   }
 
@@ -44,7 +39,6 @@ struct ReaderView: View {
               .foregroundColor(.white.opacity(0.96))
               .lineLimit(1)
               .minimumScaleFactor(0.45)
-              .shadow(color: .black.opacity(0.72), radius: 2, x: 0, y: 0)
               .frame(maxWidth: max(0, size.width - rect.minX), alignment: .topLeading)
               .offset(x: rect.minX, y: rect.minY)
           }

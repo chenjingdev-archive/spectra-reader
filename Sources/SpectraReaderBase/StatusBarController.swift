@@ -4,19 +4,22 @@ import AppKit
 final class StatusBarController: NSObject {
   private let statusItem: NSStatusItem
   private let onToggleReader: () -> Void
-  private let onReadNow: () -> Void
+  private let onSnapshotNow: () -> Void
   private let onAssistNow: () -> Void
+  private let onResetNow: () -> Void
   private let onShowSettings: () -> Void
 
   init(
     onToggleReader: @escaping () -> Void,
-    onReadNow: @escaping () -> Void,
+    onSnapshotNow: @escaping () -> Void,
     onAssistNow: @escaping () -> Void,
+    onResetNow: @escaping () -> Void,
     onShowSettings: @escaping () -> Void
   ) {
     self.onToggleReader = onToggleReader
-    self.onReadNow = onReadNow
+    self.onSnapshotNow = onSnapshotNow
     self.onAssistNow = onAssistNow
+    self.onResetNow = onResetNow
     self.onShowSettings = onShowSettings
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
@@ -29,8 +32,9 @@ final class StatusBarController: NSObject {
 
     let menu = NSMenu()
     menu.addItem(makeItem(title: "리더 켜기/끄기", action: #selector(toggleReader)))
-    menu.addItem(makeItem(title: "현재 영역 읽기", action: #selector(readNow)))
-    menu.addItem(makeItem(title: "현재 프리셋 도움 실행", action: #selector(assistNow)))
+    menu.addItem(makeItem(title: "스냅샷 누적", action: #selector(snapshotNow)))
+    menu.addItem(makeItem(title: "도움 실행", action: #selector(assistNow)))
+    menu.addItem(makeItem(title: "누적 초기화", action: #selector(resetNow)))
     menu.addItem(NSMenuItem.separator())
     menu.addItem(makeItem(title: "설정", action: #selector(showSettings)))
     menu.addItem(makeItem(title: "종료", action: #selector(quit)))
@@ -47,12 +51,16 @@ final class StatusBarController: NSObject {
     onToggleReader()
   }
 
-  @objc private func readNow() {
-    onReadNow()
+  @objc private func snapshotNow() {
+    onSnapshotNow()
   }
 
   @objc private func assistNow() {
     onAssistNow()
+  }
+
+  @objc private func resetNow() {
+    onResetNow()
   }
 
   @objc private func showSettings() {

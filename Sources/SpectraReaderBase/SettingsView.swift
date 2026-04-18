@@ -94,15 +94,21 @@ struct SettingsView: View {
         GroupBox(label: Text("단축키")) {
           VStack(alignment: .leading, spacing: 12) {
             hotkeyRow(
-              title: "오버레이 표시/숨기기",
-              modifiers: toggleHotkeyModifiers,
-              keyCode: toggleHotkeyKeyCode
+              title: "스냅샷",
+              modifiers: snapshotHotkeyModifiers,
+              keyCode: snapshotHotkeyKeyCode
             )
 
             hotkeyRow(
-              title: "현재 프리셋 도움 실행",
+              title: "도움",
               modifiers: assistHotkeyModifiers,
               keyCode: assistHotkeyKeyCode
+            )
+
+            hotkeyRow(
+              title: "초기화",
+              modifiers: resetHotkeyModifiers,
+              keyCode: resetHotkeyKeyCode
             )
           }
           .padding(8)
@@ -129,24 +135,24 @@ private extension SettingsView {
     )
   }
 
-  var toggleHotkeyModifiers: Binding<UInt> {
+  var snapshotHotkeyModifiers: Binding<UInt> {
     Binding(
-      get: { settings.toggleHotkey.modifiers },
+      get: { settings.snapshotHotkey.modifiers },
       set: {
-        var hotkey = settings.toggleHotkey
+        var hotkey = settings.snapshotHotkey
         hotkey.modifiers = $0
-        settings.toggleHotkey = hotkey
+        settings.snapshotHotkey = hotkey
       }
     )
   }
 
-  var toggleHotkeyKeyCode: Binding<Int> {
+  var snapshotHotkeyKeyCode: Binding<Int> {
     Binding(
-      get: { settings.toggleHotkey.keyCode },
+      get: { settings.snapshotHotkey.keyCode },
       set: {
-        var hotkey = settings.toggleHotkey
+        var hotkey = settings.snapshotHotkey
         hotkey.keyCode = $0
-        settings.toggleHotkey = hotkey
+        settings.snapshotHotkey = hotkey
       }
     )
   }
@@ -169,6 +175,28 @@ private extension SettingsView {
         var hotkey = settings.assistHotkey
         hotkey.keyCode = $0
         settings.assistHotkey = hotkey
+      }
+    )
+  }
+
+  var resetHotkeyModifiers: Binding<UInt> {
+    Binding(
+      get: { settings.resetHotkey.modifiers },
+      set: {
+        var hotkey = settings.resetHotkey
+        hotkey.modifiers = $0
+        settings.resetHotkey = hotkey
+      }
+    )
+  }
+
+  var resetHotkeyKeyCode: Binding<Int> {
+    Binding(
+      get: { settings.resetHotkey.keyCode },
+      set: {
+        var hotkey = settings.resetHotkey
+        hotkey.keyCode = $0
+        settings.resetHotkey = hotkey
       }
     )
   }
